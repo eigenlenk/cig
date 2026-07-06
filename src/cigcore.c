@@ -325,7 +325,25 @@ cig_frame_ref_stack_t* cig_frame_stack() {
     │ STATE │
     └───────┘ */
 
-M_OPTIONAL(void*) cig_memory_allocate(size_t bytes) {
+M_OPTIONAL(void*)
+cig_memory_allocation(size_t *size)
+{
+  cig_state *state = enable_state();
+  
+  if (!state) {
+    return NULL;
+  }
+
+  if (size) {
+    *size = state->memory.size;
+  }
+
+  return state->memory.bytes;
+}
+
+M_OPTIONAL(void*)
+cig_memory_allocate(size_t bytes)
+{
   cig_state *state = enable_state();
   
   if (!state) {
@@ -340,37 +358,14 @@ M_OPTIONAL(void*) cig_memory_allocate(size_t bytes) {
       state->memory.bytes = current->allocator.realloc(current->allocator.ud, state->memory.bytes, state->memory.size, bytes);
       state->memory.size = bytes;
     }
-    state->memory.mapped = 0;
     return state->memory.bytes;
   }
 
   current->allocator.tracked_bytes += bytes;
   state->memory.bytes = current->allocator.alloc(current->allocator.ud, bytes, ALIGN_OF(max_align_t));
   state->memory.size = bytes;
-  state->memory.mapped = 0;
 
   return state->memory.bytes;
-}
-
-M_OPTIONAL(void*)
-cig_memory_read(size_t bytes)
-{
-  cig_state *state = cig_current()->_state;
-
-  if (!state || !state->memory.bytes) {
-    return NULL;
-  }
-  else if (bytes == 0) {
-    state->memory.mapped = 0;
-    return NULL;
-  }
-  else if (state->memory.mapped + bytes > state->memory.size) {
-    return NULL;
-  }
-
-  void *result = &state->memory.bytes[state->memory.mapped];
-  state->memory.mapped += bytes;
-  return result;
 }
 
 void
@@ -387,7 +382,6 @@ cig_memory_free()
 
     state->memory.bytes = NULL;
     state->memory.size = 0;
-    state->memory.mapped = 0;
   }
 }
 

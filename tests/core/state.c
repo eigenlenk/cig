@@ -129,22 +129,21 @@ TEST(core_state, memory_allocation) {
   for (i = 0; i < 2; ++i) {
     begin();
 
-    void *new_mem = cig_memory_allocate(4096); /* Allocate whopping 4KB */
+    if (i == 0) {
+      TEST_ASSERT_NULL(cig_memory_allocation(NULL));
+    } else {
+      TEST_ASSERT_NOT_NULL(cig_memory_allocation(NULL));
+    }
 
-    TEST_ASSERT_NOT_NULL(new_mem);
+    /* Allocate or return the previously allocated memory */
+    cig_v *vec2 = cig_memory_allocate(sizeof(cig_v));
 
-    cig_v *vec2 = CIG_MEM_READ(cig_v);
-    unsigned long *ul = CIG_MEM_READ(unsigned long);
-    char *str = cig_memory_read(sizeof(char[32]));
+    TEST_ASSERT_NOT_NULL(vec2);
 
     if (i == 0) { /* Store data on first frame */
       *vec2 = cig_v_make(13, 17);
-      *ul = cig_current()->id;
-      strcpy(str, "Hello, World!");
     } else { /* Read data on the second */
       TEST_ASSERT_EQUAL_VEC2(cig_v_make(13, 17), *vec2);
-      TEST_ASSERT_EQUAL_UINT32(cig_current()->id, *ul);
-      TEST_ASSERT_EQUAL_STRING("Hello, World!", str);
     }
 
     end();

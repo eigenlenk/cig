@@ -139,7 +139,7 @@ typedef struct {
 
 typedef struct {
   uint8_t *bytes;
-  size_t size, mapped;
+  size_t size;
 } cig_memory_st;
 
 typedef struct {
@@ -527,6 +527,9 @@ M_INLINED M_OPTIONAL(cig_frame*) cig_retain(M_OPTIONAL(cig_frame*) frame) {
   return frame;
 }
 
+/* Data allocated by and associated with the current element */
+M_OPTIONAL(void*) cig_memory_allocation(size_t*);
+
 /**
  * @brief Allocates memory for the current element using the configured allocator.
  * 
@@ -537,23 +540,11 @@ M_INLINED M_OPTIONAL(cig_frame*) cig_retain(M_OPTIONAL(cig_frame*) frame) {
 M_OPTIONAL(void*) cig_memory_allocate(size_t bytes);
 
 /**
- * @brief Map some portion of the allocated memory in the current element
- * 
- * Reads the memory address at the current read postions, returns that and
- * advances the internal counter.
- * 
- * @param bytes - Bytes to read. Pass zero to reset reader.
- * 
- * @return Pointer to the mapped object or NULL if no memory has been allocated or
- * there's not enough space.
- */
-M_OPTIONAL(void*) cig_memory_read(size_t bytes);
-
-/**
  * Free memory associated with the current element
  */
 void cig_memory_free();
 
+/**/
 size_t cig_tracked_bytes(void);
 
 /*  ┌──────────────────────────────┐

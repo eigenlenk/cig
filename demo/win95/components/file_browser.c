@@ -167,7 +167,6 @@ begin_file_browser(
 bool
 file_item(image_id_t image, const char *title)
 {
-  CIG_MEM_READ_RESET();
   file_browser_data_t *data = CIG_MEM_READ(file_browser_data_t);
   cig_frame *file_frame;
   size_t index = data->count++;
@@ -195,7 +194,6 @@ file_item(image_id_t image, const char *title)
 }
 
 void end_file_browser() {
-  CIG_MEM_READ_RESET();
   int i;
   file_browser_data_t *data = CIG_MEM_READ(file_browser_data_t);
 

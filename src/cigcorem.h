@@ -111,8 +111,8 @@ extern cig__macro_ctx_st cig__macro_ctx;
  */
 #define CIG_LAST() cig__macro_ctx.last_closed
 
-#define CIG_MEM_READ(T) (T*)cig_memory_read(sizeof(T))
-#define CIG_MEM_READ_RESET() cig_memory_read(0)
+/* Memory */
+#define CIG_MEM_READ(T) (T*)cig_memory_allocation(NULL)
 
 /* Layout pinning */
 

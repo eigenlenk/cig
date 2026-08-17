@@ -144,7 +144,7 @@ TEST(text_label, span_limit)
   begin();
 
   /* We allocate 2 spans/lines. Third line in the text is not added to the label */
-  cig_label *label = cig_memory_allocate(CIG_LABEL_SIZEOF(2));
+  cig_label *label = cig_mem_alloc(NULL, CIG_LABEL_SIZEOF(2));
   label->available_spans = 2;
 
   cig_label_prepare(label, cig_v_make(15, 3), (cig_text_properties) { 0 }, "Olá mundo!\nHello world!\n\nTere maailm!");
@@ -285,7 +285,7 @@ TEST(text_label, forced_line_change) {
 TEST(text_label, prepare_single_long_word) {
   begin();
 
-  cig_label *label = cig_memory_allocate(CIG_LABEL_SIZEOF(4));
+  cig_label *label = cig_mem_alloc(NULL, CIG_LABEL_SIZEOF(4));
   label->available_spans = 4;
   cig_label_prepare(label, cig_v_make(7, 1), (cig_text_properties) { 0 }, "Foobarbaz");
 
@@ -303,7 +303,7 @@ TEST(text_label, prepare_single_long_word) {
 TEST(text_label, prepare_multiple_long_words) {
   begin();
 
-  cig_label *label = cig_memory_allocate(CIG_LABEL_SIZEOF(4));
+  cig_label *label = cig_mem_alloc(NULL, CIG_LABEL_SIZEOF(4));
   label->available_spans = 4;
   cig_label_prepare(label, cig_v_make(7, 4), (cig_text_properties) { 0 }, "Foobarbaz barbazfoo bazfoobar\n");
 
@@ -323,7 +323,7 @@ TEST(text_label, prepare_multiple_long_words) {
 TEST(text_label, prepare_multiple_long_words_with_newlines) {
   begin();
 
-  cig_label *label = cig_memory_allocate(CIG_LABEL_SIZEOF(4));
+  cig_label *label = cig_mem_alloc(NULL, CIG_LABEL_SIZEOF(4));
   label->available_spans = 4;
   cig_label_prepare(label, cig_v_make(7, 4), (cig_text_properties) { 0 }, "Foobarbaz\nbarbazfoo\nbazfoobar");
 
@@ -345,7 +345,7 @@ TEST(text_label, prepare_horizontal_wrap_disabled)
 {
   begin();
 
-  cig_label *label = cig_memory_allocate(CIG_LABEL_SIZEOF(10));
+  cig_label *label = cig_mem_alloc(NULL, CIG_LABEL_SIZEOF(10));
   label->available_spans = 10;
 
   /* Line of text is allowed to go outside the maximum bounds provided.

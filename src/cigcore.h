@@ -74,6 +74,8 @@ typedef void* cig_buffer_ref;
 
 typedef void (*cig_set_clip_callback)(cig_buffer_ref, cig_r, bool);
 
+typedef void (*cig_value_free_fn)(void*);
+
 /*  Structure containing parameters passed to layout function */
 typedef struct {
   /*  One or more axis which a builder uses to position children */
@@ -137,14 +139,22 @@ typedef struct {
   } _count; /* h_ and v_cur are only counted in stacks/grids */
 } cig_params;
 
-typedef struct {
-  uint8_t *bytes;
+struct cig_mem;
+
+typedef struct cig_mem {
+  uint32_t id;
   size_t size;
-} cig_memory_st;
+  struct cig_mem *prev, *next;
+  uint8_t bytes[];
+} cig_mem;
 
 typedef struct {
   bool active;
-  cig_memory_st memory;
+  cig_mem *mem;
+  struct {
+    void *ptr;
+    cig_value_free_fn free_fn;
+  } value;
 } cig_state;
 
 typedef struct cig_focus {
@@ -503,6 +513,13 @@ M_INLINED cig_r cig_absolute_rect() { return cig_current()->absolute_rect; }
 /*  @return Relative bounding rect for current content */
 M_INLINED cig_r cig_content_rect() { return cig_current()->content_rect; }
 
+M_INLINED M_OPTIONAL(cig_frame*) cig_retain(M_OPTIONAL(cig_frame*) frame) {
+  if (frame) {
+    frame->_flags |= RETAINED;
+  }
+  return frame;
+}
+
 /* @return Current frame visibility status (appeared, visible, not visible) */
 M_INLINED cig_frame_visibility cig_visibility() {
   cig_frame *open_frame = cig_current();
@@ -516,35 +533,50 @@ cig_r cig_convert_relative_rect(cig_r);
 /*  @return Pointer to the current layout element stack. Avoid accessing if possible. */
 cig_frame_ref_stack_t* cig_frame_stack();
 
-/*  ┌───────────────────────────┐
-    │ STATE & MEMORY ALLOCATION │
-    └───────────────────────────┘ */
-
-M_INLINED M_OPTIONAL(cig_frame*) cig_retain(M_OPTIONAL(cig_frame*) frame) {
-  if (frame) {
-    frame->_flags |= RETAINED;
-  }
-  return frame;
-}
-
-/* Data allocated by and associated with the current element */
-M_OPTIONAL(void*) cig_memory_allocation(size_t*);
+/*  ┌──────────────────────────────┐
+    │ MEMORY ALLOCATION & LIFETIME │
+    └──────────────────────────────┘ */
 
 /**
- * @brief Allocates memory for the current element using the configured allocator.
+ * @brief Allocates memory using configured allocator.
  * 
- * @param bytes - Amount of bytes to allocate for this element
+ * If NULL is passed as first argument, new memory is allocated and its pointer is returned.
+ * If an existing pointer is passed as first argument, it will be resized and new pointer is returned.
  * 
- * @return Pointer to the new block of memory or NULL if memory could not be allocated
+ * @param ptr - Existing allocation to resize, or NULL for new allocation
+ * @param bytes - Required size
+ * 
+ * @return Pointer to the allocated memory or NULL if memory could not be allocated
  */
-M_OPTIONAL(void*) cig_memory_allocate(size_t bytes);
+M_OPTIONAL(void*) cig_mem_alloc(M_OPTIONAL(void*) ptr, size_t bytes);
 
 /**
- * Free memory associated with the current element
+ * Read next allocation starting from `start`.
+ * 
+ * Passing NULL reads the first allocation, passing the pointer of the first
+ * allocation reads the second one and so forth.
  */
-void cig_memory_free();
+void* cig_mem_read(void *start);
 
-/**/
+/* Frees memory allocated through `cig_mem_alloc` */
+void cig_mem_free(void *ptr);
+
+/**
+ * Store and associate data with current element lifetime.
+ * 
+ * If `free` function is passed, the function with value is called
+ * when element disappears.
+ */
+bool cig_set_value(M_OPTIONAL(void*), cig_value_free_fn);
+
+/* Return value associated with current element */
+M_OPTIONAL(void*) cig_value(void);
+
+/**
+ * For debugging
+ * 
+ * Number of live bytes allocated through `cig_mem_alloc`, plus the
+ * additional header per each allocation. */
 size_t cig_tracked_bytes(void);
 
 /*  ┌──────────────────────────────┐

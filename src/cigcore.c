@@ -3,6 +3,8 @@
 #include <string.h>
 #include <assert.h>
 
+#include <stdio.h>
+
 cig__macro_ctx_st cig__macro_ctx = { 0 };
 
 static cig_context *current = NULL;
@@ -14,7 +16,7 @@ static bool requested_layout_step_mode = false;
 #endif
 
 /*  Forward delcarations */
-static M_OPTIONAL(cig_state*) find_state(cig_id);
+static M_OPTIONAL(cig_state*) find_state(cig_id, bool);
 static M_OPTIONAL(cig_scroll_state_t*) find_scroll_state(cig_id);
 static M_OPTIONAL(cig_focus*) find_focus_state(cig_id);
 static M_OPTIONAL(cig_state *) enable_state();
@@ -68,7 +70,9 @@ void cig_init_context(cig_context *context) {
   for (i = 0; i < CIG_STATES_MAX; ++i) {
     context->state_list[i].id = 0;
     context->state_list[i].last_tick = context->tick;
-    context->state_list[i].value.memory.bytes = NULL;
+    context->state_list[i].value.mem = NULL;
+    context->state_list[i].value.value.ptr = NULL;
+    context->state_list[i].value.value.free_fn = NULL;
   }
   
   for (i = 0; i < CIG_SCROLLABLE_ELEMENTS_MAX; ++i) {
@@ -163,24 +167,53 @@ update_focus_chain(cig_focus *start, bool focused)
   }
 }
 
+#define CIG__ALLOC_HEADER 0xDEADBEEF
+
+static cig_mem*
+allocation_header(void *ptr)
+{
+  if (ptr) {
+    cig_mem *header = (cig_mem *)((uint8_t *)ptr - offsetof(cig_mem, bytes));
+
+    if (header && header->id == CIG__ALLOC_HEADER) {
+      return header;
+    }
+  }
+  return NULL;
+}
+
+static void
+free_all_allocations(cig_state *state)
+{
+  cig_mem *header = state->mem;
+
+  while (header) {
+    struct cig_mem *next = header->next;
+    current->allocator.tracked_bytes -= sizeof(cig_mem) + header->size;
+    current->allocator.free(current->allocator.ud, header);
+    header = next;
+  }
+
+  state->mem = NULL;
+}
+
 void
 cig_end_layout()
 {
-  register unsigned int i, j;
+  unsigned int i, j;
 
   for (i = 0; i < CIG_STATES_MAX; ++i) {
-    if (current->state_list[i].last_tick != current->tick) {
+    if (current->state_list[i].last_tick != current->tick && current->state_list[i].value.active) {
       current->state_list[i].value.active = false;
-      if (current->state_list[i].value.memory.bytes) {
-        current->allocator.tracked_bytes -= current->state_list[i].value.memory.size;
-
-        if (current->allocator.free) {
-          current->allocator.free(current->allocator.ud, current->state_list[i].value.memory.bytes);
-        }
-
-        current->state_list[i].value.memory.bytes = NULL;
-        current->state_list[i].value.memory.size = 0;
+      current->state_list[i].id = 0;
+      
+      if (current->state_list[i].value.value.free_fn && current->state_list[i].value.value.ptr) {
+        current->state_list[i].value.value.free_fn(current->state_list[i].value.value.ptr);
       }
+      current->state_list[i].value.value.free_fn = NULL;
+      current->state_list[i].value.value.ptr = NULL;
+
+      free_all_allocations(&current->state_list[i].value);
     }
   }
 
@@ -325,63 +358,194 @@ cig_frame_ref_stack_t* cig_frame_stack() {
     │ STATE │
     └───────┘ */
 
-M_OPTIONAL(void*)
-cig_memory_allocation(size_t *size)
+M_INLINED cig_mem*
+allocation_head(cig_mem *element)
 {
-  cig_state *state = enable_state();
-  
-  if (!state) {
-    return NULL;
+  cig_mem *head = element;
+
+  while (head && head->next) {
+    head = head->next;
   }
 
-  if (size) {
-    *size = state->memory.size;
-  }
-
-  return state->memory.bytes;
+  return head;
 }
 
-M_OPTIONAL(void*)
-cig_memory_allocate(size_t bytes)
+void*
+cig_mem_alloc(void *ptr, size_t bytes)
 {
   cig_state *state = enable_state();
-  
+
   if (!state) {
+    cig__macro_ctx.last_allocation = NULL;
     return NULL;
   }
 
-  if (state->memory.bytes) {
-    /* Resize memory */
-    if (state->memory.size != bytes && current->allocator.realloc) {
-      current->allocator.tracked_bytes -= state->memory.size;
-      current->allocator.tracked_bytes += bytes;
-      state->memory.bytes = current->allocator.realloc(current->allocator.ud, state->memory.bytes, state->memory.size, bytes);
-      state->memory.size = bytes;
+  const size_t new_size = sizeof(cig_mem) + bytes;
+
+  if (ptr) {
+    cig_mem *header = allocation_header(ptr);
+
+    if (!header) {
+      /* TODO: Log warning? */
+      cig__macro_ctx.last_allocation = NULL;
+      return NULL;
     }
-    return state->memory.bytes;
+
+    if (!bytes) {
+      cig_mem_free(ptr);
+      cig__macro_ctx.last_allocation = NULL;
+      return NULL;
+    }
+
+    const size_t old_size = sizeof(cig_mem) + header->size;
+
+    if (current->allocator.realloc) {
+      current->allocator.tracked_bytes -= old_size;
+      current->allocator.tracked_bytes += new_size;
+
+      struct cig_mem *prev = header->prev;
+      struct cig_mem *next = header->next;
+
+      cig_mem *new_header = current->allocator.realloc(current->allocator.ud, header, old_size, new_size);
+      new_header->size = bytes;
+      new_header->prev = prev;
+      new_header->next = next;
+
+      if (!prev) {
+        state->mem = new_header;
+      } else {
+        prev->next = new_header;
+      }
+
+      if (next) {
+        next->prev = new_header;
+      }
+
+      cig__macro_ctx.last_allocation = new_header->bytes;
+      
+      return new_header->bytes;
+    } else {
+      cig__macro_ctx.last_allocation = ptr;
+      /* TODO: Log warning about missing realloc support? */
+      return ptr;
+    }
+  } else {
+    current->allocator.tracked_bytes += new_size;
+
+    cig_mem *new_header = current->allocator.alloc(current->allocator.ud, new_size, ALIGN_OF(max_align_t));
+    new_header->id = CIG__ALLOC_HEADER;
+    new_header->size = bytes;
+    new_header->next = NULL;
+
+    cig_mem *tail = allocation_head(state->mem);
+      
+    new_header->prev = tail;
+
+    if (tail) {
+      tail->next = new_header;
+    } else {
+      state->mem = new_header;
+    }
+
+    cig__macro_ctx.last_allocation = new_header->bytes;
+
+    return new_header->bytes;
+  }
+}
+
+void*
+cig_mem_read(void *start)
+{
+  cig_state *state = enable_state();
+
+  cig__macro_ctx.last_read = NULL;
+
+  if (!state || !state->mem) {
+    return NULL;
   }
 
-  current->allocator.tracked_bytes += bytes;
-  state->memory.bytes = current->allocator.alloc(current->allocator.ud, bytes, ALIGN_OF(max_align_t));
-  state->memory.size = bytes;
+  if (!start) {
+    cig__macro_ctx.last_read = state->mem->bytes;
+  } else {
+    cig_mem *header = allocation_header(start);
+    if (header && header->next) {
+      cig__macro_ctx.last_read = header->next->bytes;
+    }
+  }
 
-  return state->memory.bytes;
+  return cig__macro_ctx.last_read;
 }
 
 void
-cig_memory_free()
+cig_mem_free(void *ptr)
 {
-  cig_state *state = cig_current()->_state;
+  if (!ptr) {
+    return;
+  }
 
-  if (state && state->memory.bytes) {
-    current->allocator.tracked_bytes -= state->memory.size;
+  cig_state *state = enable_state();
 
-    if (current->allocator.free) {
-      current->allocator.free(current->allocator.ud, state->memory.bytes); /* Free */
+  if (!state) {
+    return;
+  }
+
+  cig_mem *header = allocation_header(ptr);
+
+  if (header) {
+    bool is_root = state->mem == header;
+    struct cig_mem *prev = header->prev;
+    struct cig_mem *next = header->next;
+
+    current->allocator.tracked_bytes -= sizeof(cig_mem) + header->size;
+    current->allocator.free(current->allocator.ud, header);
+
+    if (prev) {
+      prev->next = next;
     }
+    if (next) {
+      if (is_root) {
+        state->mem = next;
+      }
+      next->prev = prev;
+    } else if (is_root) {
+      state->mem = NULL;
+    }
+  } else {
+    /* Not allocated through CIG */
+  }
+}
 
-    state->memory.bytes = NULL;
-    state->memory.size = 0;
+bool
+cig_set_value(void *data, cig_value_free_fn free_fn)
+{
+  cig_state *state = enable_state();
+
+  if (!state) {
+    return false;
+  }
+
+  /* Passing NULL frees any existing value */
+  if (!data && state->value.ptr && state->value.free_fn) {
+    state->value.free_fn(state->value.ptr);
+    state->value.ptr = NULL;
+    return true;
+  }
+
+  state->value.ptr = data;
+  state->value.free_fn = free_fn;
+
+  return true;
+}
+
+M_OPTIONAL(void*)
+cig_value(void)
+{
+  cig_state *state = enable_state();
+
+  if (state) {
+    return state->value.ptr;
+  } else {
+    return NULL;
   }
 }
 
@@ -1435,6 +1599,7 @@ static cig_frame* push_frame(
     .visibility = M_MIN(CIG_FRAME_VISIBLE, previous_visibility + 1),
     ._layout_function = layout_function,
     ._layout_params = params,
+    ._state = find_state(next_id, true), // Match active states only
     ._parent = top,
     ._last_tick = current->tick,
     ._flags = OPEN
@@ -1493,21 +1658,21 @@ handle_frame_hover(cig_frame *frame)
 }
 
 static M_OPTIONAL(cig_state*)
-find_state(const cig_id id)
+find_state(const cig_id id, bool active_only)
 {
   int i, open = -1, stale = -1;
 
-  /* Find a state with a matching ID, with no ID yet, or a stale state */
+  /* Find a state with a matching ID, first unassigned (open) or first stale state */
   for (i = 0; i < CIG_STATES_MAX; ++i) {
     if (current->state_list[i].id == id) {
       current->state_list[i].value.active = true;
       current->state_list[i].last_tick = current->tick;
       return &current->state_list[i].value;
     }
-    else if (open < 0 && !current->state_list[i].id) {
+    else if (!active_only && open < 0 && !current->state_list[i].id) {
       open = i;
     }
-    else if (stale < 0 && !current->state_list[i].value.active) {
+    else if (!active_only && stale < 0 && !current->state_list[i].value.active) {
       stale = i;
     }
   }
@@ -1592,7 +1757,7 @@ M_INLINED M_OPTIONAL(cig_state *) enable_state() {
   if (frame->_state) {
     return frame->_state;
   }
-  return (frame->_state = find_state(frame->id));
+  return (frame->_state = find_state(frame->id, false));
 }
 
 static void push_clip(cig_frame *frame) {

@@ -7,6 +7,17 @@
 
 #define CHILD_MENU_DELAY 0.4f
 
+struct menubar_state {
+  menu_tracking_st tracking_state;
+  win95_menu *last_hovered_menu;
+};
+
+struct menu_draw_state {
+  win95_menu *presented_submenu;
+  cig_v submenu_position;
+  float submenu_delay;
+};
+
 void menubar(size_t n, win95_menu* menus[]) {
   register size_t i;
 
@@ -14,16 +25,17 @@ void menubar(size_t n, win95_menu* menus[]) {
   cig_enable_interaction();
   cig_disable_culling();
 
-  void *mem = cig_memory_allocate(sizeof(menu_tracking_st) + sizeof(win95_menu*));
+  struct menubar_state *state = CIG_MEM_INIT(sizeof(struct menubar_state)) {
+    state->last_hovered_menu = NULL;
+    state->tracking_state = 0;
+  }
 
-  menu_tracking_st *tracking_state = (menu_tracking_st*)(mem);
-  win95_menu **last_hovered_menu = (win95_menu**)(mem + sizeof(menu_tracking_st));
   bool any_menu_active = false;
   /**
    * Tracking state at the start of the call. May be modified halfway through,
    * so to keep things consistent a constant value is used until the next frame.
    */
-  const menu_tracking_st current_tracking_state = *tracking_state;
+  const menu_tracking_st current_tracking_state = state->tracking_state;
 
   CIG_HSTACK(RECT_AUTO, NO_INSETS) {
     for (i = 0; i < n; ++i) {
@@ -48,13 +60,13 @@ void menubar(size_t n, win95_menu* menus[]) {
          *   over another menubar button — without requiring another click.
          */
         if (cig_hovered()) {
-          *last_hovered_menu = menus[i];
+          state->last_hovered_menu = menus[i];
         }
 
-        const bool current_menu_selected = *last_hovered_menu == menus[i];
+        const bool current_menu_selected = state->last_hovered_menu == menus[i];
 
         if (current_menu_selected) {
-          menu_track(tracking_state, menus[i], (menu_presentation) {
+          menu_track(&state->tracking_state, menus[i], (menu_presentation) {
             .position = { -cig_current()->insets.left, CIG_B },
             .origin = ORIGIN_TOP_LEFT,
           });
@@ -81,7 +93,7 @@ void menubar(size_t n, win95_menu* menus[]) {
 
   /* None of the menu buttons were tracking */
   if (!any_menu_active) {
-    *last_hovered_menu = NULL;
+    state->last_hovered_menu = NULL;
   }
 }
 
@@ -205,11 +217,10 @@ void menu_draw(win95_menu *this, menu_presentation presentation, bool *prevent_c
   ) {
     cig_retain(cig_current());
 
-    void *mem = cig_memory_allocate(sizeof(win95_menu*) + sizeof(cig_v) + sizeof(float));
-
-    win95_menu **presented_submenu = (win95_menu**)(mem);
-    cig_v *submenu_position = (cig_v*)(mem + sizeof(win95_menu*));
-    float *submenu_delay = (float*)(mem + sizeof(win95_menu*) + sizeof(cig_v));
+    struct menu_draw_state *draw_state = CIG_MEM_INIT(sizeof(struct menu_draw_state)) {
+      draw_state->presented_submenu = NULL;
+      draw_state->submenu_delay = 0;
+    }
 
     cig_fill_style(get_style(STYLE_STANDARD_DIALOG), 0);
 
@@ -217,7 +228,7 @@ void menu_draw(win95_menu *this, menu_presentation presentation, bool *prevent_c
 
     if (cig_visibility() == CIG_FRAME_APPEARED || cig_hovered()) {
       /* Hovering non-content (edges, separators) */
-      *presented_submenu = NULL;
+      draw_state->presented_submenu = NULL;
     }
     
     if (this->style == START) {
@@ -250,17 +261,17 @@ void menu_draw(win95_menu *this, menu_presentation presentation, bool *prevent_c
 
             if (item_hovered) {
               if (item->type == CHILD_MENU) {
-                if (*presented_submenu != child_menu) {
-                  *submenu_delay = CHILD_MENU_DELAY;
+                if (draw_state->presented_submenu != child_menu) {
+                  draw_state->submenu_delay = CHILD_MENU_DELAY;
                 }
-                *presented_submenu = child_menu;
-                *submenu_position = cig_v_make(size_info.stack_insets.left + CIG_R_INSET - 2, CIG_Y - 3);
+                draw_state->presented_submenu = child_menu;
+                draw_state->submenu_position = cig_v_make(size_info.stack_insets.left + CIG_R_INSET - 2, CIG_Y - 3);
               } else {
-                *presented_submenu = NULL;
+                draw_state->presented_submenu = NULL;
               }
             } else {
               if (item->type == CHILD_MENU) {
-                draws_highlight = *presented_submenu == child_menu;
+                draws_highlight = draw_state->presented_submenu == child_menu;
               }
             }
 
@@ -347,14 +358,14 @@ void menu_draw(win95_menu *this, menu_presentation presentation, bool *prevent_c
       *bool_to_toggle = !*bool_to_toggle;
     }
 
-    if (*presented_submenu) {
-      if (*submenu_delay > FLT_EPSILON) {
-        *submenu_delay -= cig_delta_time();
+    if (draw_state->presented_submenu) {
+      if (draw_state->submenu_delay > FLT_EPSILON) {
+        draw_state->submenu_delay -= cig_delta_time();
       } else {
-        *submenu_delay = 0.f;
+        draw_state->submenu_delay = 0.f;
 
-        menu_draw(*presented_submenu, (menu_presentation) {
-          .position = *submenu_position,
+        menu_draw(draw_state->presented_submenu, (menu_presentation) {
+          .position = draw_state->submenu_position,
           .origin = ORIGIN_TOP_LEFT
         }, prevent_close);
       }

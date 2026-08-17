@@ -2,6 +2,7 @@
 #include "fixture.h"
 #include "cigcore.h"
 #include "cigcorem.h"
+#include "allocator.h"
 #include "asserts.h"
 
 TEST_GROUP(core_macros);
@@ -195,6 +196,33 @@ TEST(core_macros, pinning)
   TEST_ASSERT_EQUAL_RECT(cig_r_make(420, 0, 200, 150), inset_rect);
 }
 
+TEST(core_macros, mem_init)
+{
+  set_up_test_allocator(&ctx);
+
+  int i, init_count = 0;
+
+  for (i = 0; i < 2; ++i) {
+    int *a = CIG_MEM_INIT(sizeof(int)) {
+      *a = 100;
+      init_count ++;
+    }
+
+    if (i == 0) {
+      TEST_ASSERT_NULL(cig__macro_ctx.last_read);
+      TEST_ASSERT_NOT_NULL(cig__macro_ctx.last_allocation);
+    } else {
+      TEST_ASSERT_NOT_NULL(cig__macro_ctx.last_read);
+    }
+
+    TEST_ASSERT_NOT_NULL(a);
+    TEST_ASSERT_EQUAL_INT(100, *a);
+  }
+
+  TEST_ASSERT_EQUAL_INT(1, init_count);
+  TEST_ASSERT_EQUAL_INT(1, alloc_count);
+}
+
 TEST_GROUP_RUNNER(core_macros)
 {
   RUN_TEST_CASE(core_macros, main_macro_and_retaining);
@@ -203,5 +231,6 @@ TEST_GROUP_RUNNER(core_macros)
   RUN_TEST_CASE(core_macros, grid);
   RUN_TEST_CASE(core_macros, pin_basic);
   RUN_TEST_CASE(core_macros, pinning);
+  RUN_TEST_CASE(core_macros, mem_init);
   // TODO: check positional and rect macros
 }

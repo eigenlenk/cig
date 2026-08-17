@@ -47,7 +47,9 @@ static void start_button(cig_r rect) {
     cig_disable_culling();
     cig_enable_focus(NULL);
 
-    menu_tracking_st *tracking = cig_memory_allocate(sizeof(menu_tracking_st));
+    menu_tracking_st *tracking = CIG_MEM_INIT(sizeof(menu_tracking_st)) {
+      *tracking = (menu_tracking_st) { 0 };
+    };
 
     menu_track(tracking, &start_menus[START_MAIN], (menu_presentation) {
       .position = { -4, -2 },
@@ -117,9 +119,10 @@ static void do_desktop() {
 }
 
 static void do_taskbar() {
+  static cig_label *clock_label = NULL;
   const int start_button_width = 54;
   const int spacing = 4;
-  register size_t i;
+  size_t i;
 
   cig_set_next_id(cig_hash("taskbar_clock"));
 
@@ -127,8 +130,10 @@ static void do_taskbar() {
     cig_r_make(0, CIG_H - TASKBAR_H, CIG_W, TASKBAR_H),
     CIG_INSETS(cig_i_make(2, 4, 2, 2))
   ) {
-    cig_label *clock_label = cig_memory_allocate(CIG_LABEL_SIZEOF(1));
-    clock_label->available_spans = 1;
+    if (!clock_label) {
+      clock_label = cig_mem_alloc(0, CIG_LABEL_SIZEOF(1));
+      clock_label->available_spans = 1;
+    }
 
     cig_fill_color(get_color(COLOR_DIALOG_BACKGROUND));
     cig_draw_line(cig_v_make(CIG_SX, CIG_SY+1), cig_v_make(CIG_SX+CIG_W, CIG_SY+1), get_color(COLOR_WHITE), 1);

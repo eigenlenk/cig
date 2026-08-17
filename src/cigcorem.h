@@ -72,6 +72,7 @@ typedef struct {
   cig_args args;
   cig_frame *last_closed;
   cig_frame **open;
+  void *last_allocation, *last_read;
 } cig__macro_ctx_st;
 
 extern cig__macro_ctx_st cig__macro_ctx;
@@ -112,7 +113,22 @@ extern cig__macro_ctx_st cig__macro_ctx;
 #define CIG_LAST() cig__macro_ctx.last_closed
 
 /* Memory */
-#define CIG_MEM_READ(T) (T*)cig_memory_allocation(NULL)
+
+/**
+ * Returns first allocated value or allocates it.
+ * 
+ * Block after the macro is only called when allocating and can be
+ * used to initialize the state.
+ * 
+ * ```c
+ * int *a = CIG_MEM_INIT(sizeof(int)) { *a = 5; }
+ * ```
+ */
+#define CIG_MEM_INIT(SIZE)                                         \
+  cig_mem_read(NULL)                                            \
+    ? cig__macro_ctx.last_read                                     \
+    : cig_mem_alloc(NULL, SIZE);                             \
+  if (!cig__macro_ctx.last_read && cig__macro_ctx.last_allocation)
 
 /* Layout pinning */
 

@@ -158,8 +158,12 @@ cig_draw_label(cig_text_properties props, const char *text, ...)
   register const cig_r absolute_rect = cig_r_inset(cig_absolute_rect(), cig_current()->insets);
 
   const char *str;
-  cig_label *label = cig_memory_allocate(sizeof(cig_label) + sizeof(cig_span[CIG_LABEL_SPANS_MAX]));
-  label->available_spans = CIG_LABEL_SPANS_MAX;
+  cig_label *label;
+
+  if (!(label = cig_mem_read(NULL))) {
+    label = cig_mem_alloc(NULL, sizeof(cig_label) + sizeof(cig_span[CIG_LABEL_SPANS_MAX]));
+    label->available_spans = CIG_LABEL_SPANS_MAX;
+  }
 
   label_prepare(label, &props);
 

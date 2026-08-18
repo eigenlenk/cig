@@ -59,6 +59,7 @@ int main(int argc, char **argv)
       "-Wno-missing-field-initializers",
       "-Wno-unused-parameter",
       "-Wfatal-errors",
+      // "-g",
       
       "-I"SRC_FOLDER,
       "-I"TESTS_FOLDER,
@@ -106,6 +107,7 @@ int main(int argc, char **argv)
       "-Wno-missing-field-initializers",
       "-Wno-unused-parameter",
       "-Wfatal-errors",
+      // "-g",
       
       "-I"SRC_FOLDER,
       "-I"DEPS_FOLDER,

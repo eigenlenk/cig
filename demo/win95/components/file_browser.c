@@ -32,8 +32,9 @@ large_file_icon(
     }
 
     /* Label with 3 lines */
-    cig_label *label = cig_memory_allocate(CIG_LABEL_SIZEOF(3));
-    label->available_spans = 3;
+    cig_label *label = CIG_MEM_INIT(CIG_LABEL_SIZEOF(3)) {
+      label->available_spans = 3;
+    }
 
     /* We need to 'prepare' the label here to know how large of a rectangle
        to draw around it when the icon is selected */
@@ -113,7 +114,8 @@ begin_file_browser(
     *number_selected = 0;
   }
 
-  file_browser_data_t *data = cig_memory_allocate(sizeof(file_browser_data_t));
+  file_browser_data_t *data = CIG_MEM_INIT(sizeof(file_browser_data_t)) {};
+
   data->text_color = text_color;
   data->number_selected = number_selected;
   data->count = 0;
@@ -167,7 +169,7 @@ begin_file_browser(
 bool
 file_item(image_id_t image, const char *title)
 {
-  file_browser_data_t *data = CIG_MEM_READ(file_browser_data_t);
+  file_browser_data_t *data = cig_mem_read(NULL);
   cig_frame *file_frame;
   size_t index = data->count++;
   bool did_double_click = false, did_select = false;
@@ -195,7 +197,7 @@ file_item(image_id_t image, const char *title)
 
 void end_file_browser() {
   int i;
-  file_browser_data_t *data = CIG_MEM_READ(file_browser_data_t);
+  file_browser_data_t *data = cig_mem_read(NULL);
 
   if (data->number_selected) {
     for (i = 0; i < 32; ++i) {

@@ -13,6 +13,13 @@ typedef enum {
   WINDOW_MINIMIZE
 } window_message_t;
 
+typedef enum {
+  WINDOW_DID_MOVE = M_BIT(0),
+  WINDOW_DID_RESIZE = M_BIT(1),
+  WINDOW_DID_MAXIMIZE = M_BIT(2),
+  WINDOW_DID_RESTORE = M_BIT(3)
+} window_update;
+
 typedef void (*win_proc_t)(struct window_t*);
 
 typedef struct window_t {
@@ -21,7 +28,9 @@ typedef struct window_t {
   cig_id id;
   win_proc_t proc;
   window_message_t last_message;
+  window_update updates;
   void *data;
+  void (*on_close)(struct window_t *);
   cig_r rect;
   cig_r rect_before_maximized;
   cig_v min_size;

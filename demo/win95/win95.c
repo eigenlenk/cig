@@ -222,28 +222,39 @@ win95_run()
 void
 win95_open_app(application_t app)
 {
-  application_t *new_app = &this->applications[this->running_apps++];
-  *new_app = app;
-  if (new_app->windows[0].id) {
-    window_manager_create(&this->window_manager, new_app, new_app->windows[0]);
+  if (this->running_apps == WIN95_APPS_MAX) {
+    return;
+  }
+
+  application_t *ptr = malloc(sizeof(application_t));
+  *ptr = app;
+  this->applications[this->running_apps++] = ptr;
+
+  if (ptr->windows[0].id) {
+    window_manager_create(&this->window_manager, ptr, ptr->windows[0]);
   }
 }
 
 void
 win95_close_application(application_t *app)
 {
-  register size_t i, j;
+  size_t i, j;
   app->proc = NULL;
+  if (app->on_kill) {
+    app->on_kill(app);
+  }
   if (app->data) {
     free(app->data);
     app->data = NULL;
   }
   for (i = 0; i < this->running_apps; ++i) {
-    if (&this->applications[i] == app) {
+    if (this->applications[i] == app) {
+      free(app);
       for (j = i+1; j < this->running_apps; ++j) {
         this->applications[j-1] = this->applications[j];
       }
       this->running_apps--;
+      break;
     }
   }
 }
@@ -251,10 +262,10 @@ win95_close_application(application_t *app)
 application_t*
 win95_find_open_app(const char *id)
 {
-  register size_t i;
+  size_t i;
   application_t *app;
   for (i = 0; i < this->running_apps; ++i) {
-    app = &this->applications[i];
+    app = this->applications[i];
     if (!strcmp(app->id, id)) {
       return app;
     }
@@ -280,11 +291,11 @@ win95_show_about_window()
     └──────────┘ */
 
 static void process_apps() {
-  register size_t i;
+  size_t i;
   application_t *app;
 
   for (i = 0; i < this->running_apps; ++i) {
-    app = &this->applications[i];
+    app = this->applications[i];
 
     if (app->proc) {
       /* App results not really implemented right now */
@@ -306,14 +317,8 @@ static void open_explorer_at(const char *path) {
 }
 
 static void launch_app_by_id(menu_item *item) {
-  const char *app_id = (const char *)item->data;
-  printf("Launch application: %s\n", app_id);
-  
-  if (!strcmp(app_id, "wordwiz")) {
-    win95_open_app(wordwiz_app());
-  } else if (!strcmp(app_id, "calculator")) {
-    win95_open_app(calculator_app());
-  }
+  application_t (*builder)(void) = item->data;
+  win95_open_app(builder());
 }
 
 /* Set up the main START menu and its children */
@@ -404,7 +409,7 @@ setup_menus()
       .items = {
         .count = 1,
         .list = {
-          { .title = "WordWiz", .icon = IMAGE_WORDWIZ_16, .data = "wordwiz", .handler = &launch_app_by_id }
+          { .title = "WordWiz", .icon = IMAGE_WORDWIZ_16, .data = wordwiz_app, .handler = &launch_app_by_id }
         }
       }
     }
@@ -414,10 +419,10 @@ setup_menus()
   menu_setup(&start_menus[START_PROGRAMS_ACCESSORIES], "Accessories", START_SUBMENU, NULL, 1, (menu_group[]) {
     {
       .items = {
-        .count = 3,
+        .count = 4,
         .list = {
           { .type = CHILD_MENU, .data = &start_menus[START_PROGRAMS_ACCESSORIES_GAMES], .icon = IMAGE_PROGRAM_FOLDER_16 },
-          { .title = "Calculator", .icon = IMAGE_CALCULATOR_16, .data = "calculator", .handler = &launch_app_by_id },
+          { .title = "Calculator", .icon = IMAGE_CALCULATOR_16, .data = calculator_app, .handler = &launch_app_by_id },
           { .title = "Notepad", .icon = IMAGE_NOTEPAD_16 },
           { .title = "Paint", .icon = IMAGE_PAINT_16 }
         }

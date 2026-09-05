@@ -54,3 +54,4 @@ Thumbs.db
 *.old
 dev/
 bin/
+deps/raylib*

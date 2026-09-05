@@ -109,8 +109,4 @@ get_image(image_id_t);
 void*
 get_style(style_id_t);
 
-/* Applies a dark blue checkerboard dither to following image draw calls */
-void
-enable_blue_selection_dithering(bool);
-
 #endif

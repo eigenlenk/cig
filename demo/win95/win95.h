@@ -5,7 +5,9 @@
 #include "system/application.h"
 #include "system/window_manager.h"
 #include "system/resources.h"
+#include "system/backend.h"
 
+#define APP_WINDOW_TITLE "Winlose 95"
 #define WIN95_APPS_MAX 16
 #define TASKBAR_H 28
 
@@ -13,7 +15,7 @@
 
 typedef struct {
   /*__PRIVATE__*/
-  application_t applications[WIN95_APPS_MAX];
+  application_t *applications[WIN95_APPS_MAX];
   window_manager_t window_manager;
   size_t running_apps;
   bool running;

@@ -68,13 +68,19 @@ window_begin(window_t *wnd)
         /* Fallthrough */
 
       case CIG_DRAG_STATE_MOVED:
+      {
+        const cig_r rect_before = wnd->rect;
         wnd->rect = cig_r_make(
           M_CLAMP(window_drag.original_rect.x + cig_input_state()->pointer.drag.change_total.x, -(wnd->rect.w - 50), cig_layout_rect().w - 30),
           M_CLAMP(window_drag.original_rect.y + cig_input_state()->pointer.drag.change_total.y, 0, cig_layout_rect().h - 50),
           wnd->rect.w,
           wnd->rect.h
         );
+        if (!cig_r_equals(wnd->rect, rect_before)) {
+          wnd->updates |= WINDOW_DID_MOVE;
+        }
         break;
+      }
 
       default: break;
       }
@@ -211,6 +217,7 @@ handle_window_resize(window_t *wnd, window_resize_edge_t edge)
 
   case CIG_DRAG_STATE_MOVED:
   {
+      const cig_r rect_before = wnd->rect;
       const int dx = cig_input_state()->pointer.drag.change_total.x,
                 dy = cig_input_state()->pointer.drag.change_total.y;
 
@@ -227,6 +234,10 @@ handle_window_resize(window_t *wnd, window_resize_edge_t edge)
       }
       if (edge_adjustments[edge].h) {
         wnd->rect.h = M_MAX(wnd->min_size.y, window_resize.original_rect.h + dy);
+      }
+
+      if (!cig_r_equals(wnd->rect, rect_before)) {
+        wnd->updates |= WINDOW_DID_RESIZE;
       }
     break;
   }

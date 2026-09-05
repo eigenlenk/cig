@@ -207,7 +207,7 @@ static void game_menu_handler(win95_menu *menu, menu_group *group, menu_item *it
 static bool
 keyboard_button(game_data_st *game, cig_r rect, const char *key, cig_key_code keycode)
 {
-  int letter_index = key[0]-65;
+  int letter_index = keycode - CIG_KEY_A;
   bool clicked = false;
 
   CIG(rect, cig_i_uniform(4)) {
@@ -217,7 +217,7 @@ keyboard_button(game_data_st *game, cig_r rect, const char *key, cig_key_code ke
     
     cig_fill_style(get_style(STYLE_BUTTON), show_press ? CIG_STYLE_APPLY_PRESS : 0);
 
-    if (game->keyboard[letter_index] > 0) {
+    if (letter_index >= 0 && letter_index < 26 && game->keyboard[letter_index] > 0) {
       CIG(_) {
         cig_fill_color(get_color(result_color(game->keyboard[letter_index])));
       }

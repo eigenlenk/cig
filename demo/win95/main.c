@@ -188,7 +188,8 @@ void enable_blue_selection_dithering(bool enabled) {
   dithering_shader_enabled = enabled;
 }
 
-M_INLINED void load_texture(Texture2D *dst, const char *path) {
+M_INLINED void load_texture(Texture2D *dst, const char *path)
+{
   *dst = LoadTexture(path);
   SetTextureFilter(*dst, TEXTURE_FILTER_POINT);
 }
@@ -233,6 +234,7 @@ static double scale;
 static void
 set_up_render_textures()
 {
+  UnloadRenderTexture(render_texture);
   render_texture = LoadRenderTexture(win95_w, win95_h);
   SetTextureFilter(render_texture.texture, TEXTURE_FILTER_POINT);
 
@@ -255,6 +257,7 @@ check_alt_enter()
       ray_w = GetMonitorWidth(display);
       ray_h = GetMonitorHeight(display);
     }
+
     win95_w = ray_w * scale;
     win95_h = ray_h * scale;
 
@@ -265,7 +268,9 @@ check_alt_enter()
   }
 }
 
-int main(int argc, const char *argv[]) {
+int
+main(int argc, const char *argv[])
+{
   srand(time(NULL));
 
   bool run_fullscreen = false;
@@ -282,7 +287,8 @@ int main(int argc, const char *argv[]) {
   SetTraceLogLevel(LOG_WARNING);
 
   if (run_fullscreen) {
-    InitWindow(0, 0, "Winlose 95");
+    SetConfigFlags(FLAG_WINDOW_ALWAYS_RUN | FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT | FLAG_FULLSCREEN_MODE);
+    InitWindow(0, 0, APP_WINDOW_TITLE);
     ray_w = GetMonitorWidth(GetCurrentMonitor());
     ray_h = GetMonitorHeight(GetCurrentMonitor());
     scale = 0.5;
@@ -290,20 +296,15 @@ int main(int argc, const char *argv[]) {
     ray_w = 1280;
     ray_h = 960;
     scale = 0.5;
+    SetConfigFlags(FLAG_WINDOW_ALWAYS_RUN | FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
+    InitWindow(ray_w, ray_h, APP_WINDOW_TITLE);
   }
 
   win95_w = ray_w * scale;
   win95_h = ray_h * scale;
 
-  // SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT | FLAG_WINDOW_HIGHDPI);
-  SetConfigFlags(FLAG_WINDOW_ALWAYS_RUN | FLAG_WINDOW_RESIZABLE);
-  InitWindow(ray_w, ray_h, "Winlose 95");
   SetTargetFPS(90);
   SetExitKey(0);
-
-  if (run_fullscreen) {
-    ToggleFullscreen();
-  }
 
   // TODO: Would be neater to package multiple sizes and reference these simply as "name@16" or something
   load_texture(&images[IMAGE_BRIGHT_YELLOW_PATTERN], "res/images/light_yellow_pattern.png");

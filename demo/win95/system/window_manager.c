@@ -27,7 +27,12 @@ window_manager_active_window(window_manager_t *this)
   return NULL;
 }
 
-window_t* window_manager_create(window_manager_t *manager, struct application_t *app, window_t wnd) {
+window_t* window_manager_create(window_manager_t *manager, struct application_t *app, window_t wnd)
+{
+  static uint32_t _counter = 0;
+
+  if (!_counter) { _counter = time(NULL); }
+
   size_t i;
   if (!wnd.id) { wnd.id = rand(); }
 
@@ -39,7 +44,7 @@ window_t* window_manager_create(window_manager_t *manager, struct application_t 
       return existing_wnd;
     }
   } else {
-    wnd.id = CIG_TINYHASH(wnd.id, time(NULL));
+    wnd.id = CIG_TINYHASH(wnd.id, _counter++);
   }
 
   for (i = 0; i < WIN95_OPEN_WINDOWS_MAX; ++i) {
@@ -64,16 +69,18 @@ window_manager_process(window_manager_t *this)
     window_manager_bring_to_front(this, window_manager_active_window(this));
   }
 
-  register size_t i;
+  size_t i;
 
   for (i = 0; i < this->count; ++i) {
     window_t *wnd = this->order[i];
 
     if (wnd->flags & IS_MINIMIZED) {
+      wnd->updates = 0;
       continue;
     }
 
     if (!window_begin(wnd)) {
+      wnd->updates = 0;
       continue;
     }
 
@@ -82,21 +89,26 @@ window_manager_process(window_manager_t *this)
       wnd->proc(wnd);
     }
 
+    wnd->updates = 0;
+
     if (wnd->last_message) {
       switch (wnd->last_message) {
       case WINDOW_CLOSE:
         {
           window_end(wnd);
           window_manager_close(this, wnd);
-        } continue;
+          continue;
+        }
       case WINDOW_MAXIMIZE:
         {
           window_manager_maximize(this, wnd);
-        } break;
+          break;
+        }
       case WINDOW_MINIMIZE:
         {
           window_manager_minimize(this, wnd);
-        } break;
+          break;
+        }
       default:
         break;
       }
@@ -107,12 +119,16 @@ window_manager_process(window_manager_t *this)
   }
 }
 
-void window_manager_bring_to_front(window_manager_t *manager, window_t *wnd) {
+void window_manager_bring_to_front(window_manager_t *manager, window_t *wnd)
+{
   size_t i, j;
   if (!wnd) { return; }
   for (i = 0; i < manager->count; ++i) {
     if (manager->order[i] == wnd) {
-      wnd->flags &= ~IS_MINIMIZED;
+      if (wnd->flags & IS_MINIMIZED) {
+        wnd->flags &= ~IS_MINIMIZED;
+        wnd->updates |= WINDOW_DID_RESTORE;
+      }
       /* Move everyting back by 1 and set the window as last element in the order */
       for (j = i; j < manager->count - 1; ++j) {
         manager->order[j] = manager->order[j+1];
@@ -126,7 +142,7 @@ void window_manager_bring_to_front(window_manager_t *manager, window_t *wnd) {
 }
 
 window_t* window_manager_find_primary_window(window_manager_t *manager, struct application_t *app) {
-  register size_t i;
+  size_t i;
   for (i = 0; i < manager->count; ++i) {
     if (manager->order[i]->owner == app && manager->order[i]->flags & IS_PRIMARY_WINDOW) {
       return manager->order[i];
@@ -136,7 +152,7 @@ window_t* window_manager_find_primary_window(window_manager_t *manager, struct a
 }
 
 window_t* window_manager_find_id(window_manager_t *manager, cig_id id) {
-  register size_t i;
+  size_t i;
   for (i = 0; i < manager->count; ++i) {
     if (manager->order[i]->id == id) {
       return manager->order[i];
@@ -148,9 +164,12 @@ window_t* window_manager_find_id(window_manager_t *manager, cig_id id) {
 static void
 window_manager_close(window_manager_t *manager, window_t *wnd)
 {
-  register size_t i, j;
+  size_t i, j;
   if (wnd->owner && wnd->flags & IS_PRIMARY_WINDOW && wnd->owner->flags & KILL_WHEN_PRIMARY_WINDOW_CLOSED) {
     win95_close_application(wnd->owner);
+  }
+  if (wnd->on_close) {
+    wnd->on_close(wnd);
   }
   if (wnd->data) {
     free(wnd->data);
@@ -162,10 +181,10 @@ window_manager_close(window_manager_t *manager, window_t *wnd)
       for (j = i+1; j < manager->count; ++j) {
         manager->order[j-1] = manager->order[j];
       }
+      manager->count--;
       break;
     }
   }
-  manager->count--;
 }
 
 static void
@@ -173,9 +192,11 @@ window_manager_maximize(window_manager_t *manager, window_t *wnd)
 {
   if (wnd->flags & IS_MAXIMIZED) {
     wnd->flags &= ~IS_MAXIMIZED;
+    wnd->updates |= WINDOW_DID_RESTORE;
     wnd->rect = wnd->rect_before_maximized;
   } else {
     wnd->flags |= IS_MAXIMIZED;
+    wnd->updates |= WINDOW_DID_MAXIMIZE;
     wnd->rect_before_maximized = wnd->rect;
     wnd->rect = cig_r_make(0, 0, cig_layout_rect().w, cig_layout_rect().h - TASKBAR_H);
   }

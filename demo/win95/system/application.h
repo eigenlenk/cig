@@ -11,8 +11,9 @@ typedef enum {
 typedef application_proc_result_t (*application_proc_t)(struct application_t *);
 
 typedef struct application_t {
-  char id[16];
+  char id[32];
   application_proc_t proc;
+  void (*on_kill)(struct application_t *);
   void *data;
   window_t windows[1];
   enum {

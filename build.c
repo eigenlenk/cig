@@ -113,7 +113,7 @@ int main(int argc, char **argv)
       "-I"DEPS_FOLDER,
       "-I"DEMO_FOLDER"win95/",
       "-I"DEPS_FOLDER"utf8/",
-      "-I"DEPS_FOLDER"raylib-5.5_win64_mingw-w64/include",
+      "-I"DEPS_FOLDER"raylib-6.0_win64_mingw-w64/include",
       
       "-DDEBUG",
       // "-O2",
@@ -138,7 +138,7 @@ int main(int argc, char **argv)
       DEMO_FOLDER"win95/apps/games/wordwiz/wordwiz.c",
       DEMO_FOLDER"win95/apps/accessories/calculator/calculator.c",
       
-      DEPS_FOLDER"raylib-5.5_win64_mingw-w64/lib/libraylib.a",
+      DEPS_FOLDER"raylib-6.0_win64_mingw-w64/lib/libraylib.a",
       "-lopengl32",
       "-lgdi32",
       "-lwinmm"

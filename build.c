@@ -137,6 +137,7 @@ int main(int argc, char **argv)
       DEMO_FOLDER"win95/apps/welcome/welcome.c",
       DEMO_FOLDER"win95/apps/games/wordwiz/wordwiz.c",
       DEMO_FOLDER"win95/apps/accessories/calculator/calculator.c",
+      DEMO_FOLDER"win95/apps/accessories/clock/clock.c",
       
       DEPS_FOLDER"raylib-6.0_win64_mingw-w64/lib/libraylib.a",
       "-lopengl32",

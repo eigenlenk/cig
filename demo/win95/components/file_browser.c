@@ -27,9 +27,9 @@ large_file_icon(
     }
 
     CIG(RECT_AUTO_H(32)) {
-      if (is_selected) { enable_blue_selection_dithering(true); }
+      if (is_selected) { renderer_enable_blue_selection_dithering(true); }
       cig_draw_image(get_image(icon), CIG_IMAGE_MODE_TOP);
-      if (is_selected) { enable_blue_selection_dithering(false); }
+      if (is_selected) { renderer_enable_blue_selection_dithering(false); }
     }
 
     /* Label with 3 lines */

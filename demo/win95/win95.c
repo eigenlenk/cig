@@ -23,7 +23,7 @@ static win95_t *this = NULL;
 static win95_menu start_menus[8];
 static cig_v last_size = (cig_v) { 0, 0 };
 
-enum {
+enum start_menu_identifiers {
   START_MAIN,
   START_PROGRAMS,
   START_PROGRAMS_ACCESSORIES,
@@ -36,7 +36,7 @@ enum {
 
 static void process_apps();
 static void open_explorer_at(const char*);
-static void launch_app_by_id(menu_item *);
+static void launch_menu_item_app(menu_item*);
 static void setup_menus();
 static void on_resize();
 static void about_wnd_proc(window_t *this);
@@ -316,7 +316,9 @@ static void open_explorer_at(const char *path) {
   }
 }
 
-static void launch_app_by_id(menu_item *item) {
+static void
+launch_menu_item_app(menu_item *item)
+{
   application_t (*builder)(void) = item->data;
   win95_open_app(builder());
 }
@@ -409,7 +411,7 @@ setup_menus()
       .items = {
         .count = 1,
         .list = {
-          { .title = "WordWiz", .icon = IMAGE_WORDWIZ_16, .data = wordwiz_app, .handler = &launch_app_by_id }
+          { .title = "WordWiz", .icon = IMAGE_WORDWIZ_16, .data = wordwiz_app, .handler = &launch_menu_item_app }
         }
       }
     }
@@ -422,7 +424,7 @@ setup_menus()
         .count = 4,
         .list = {
           { .type = CHILD_MENU, .data = &start_menus[START_PROGRAMS_ACCESSORIES_GAMES], .icon = IMAGE_PROGRAM_FOLDER_16 },
-          { .title = "Calculator", .icon = IMAGE_CALCULATOR_16, .data = calculator_app, .handler = &launch_app_by_id },
+          { .title = "Calculator", .icon = IMAGE_CALCULATOR_16, .data = calculator_app, .handler = &launch_menu_item_app },
           { .title = "Notepad", .icon = IMAGE_NOTEPAD_16 },
           { .title = "Paint", .icon = IMAGE_PAINT_16 }
         }

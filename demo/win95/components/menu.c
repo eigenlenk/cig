@@ -304,6 +304,10 @@ void menu_draw(win95_menu *this, menu_presentation presentation, bool *prevent_c
             } else if (prevent_close) {
               /* Windows 95 keeps menus open when you click on a disabled or sub-menu item */
               if (cig_clicked(CIG_INPUT_PRIMARY_ACTION, 0)) {
+                /* Immeditately open sub-menu */
+                if (item->type == CHILD_MENU) {
+                  draw_state->submenu_delay = 0;
+                }
                 *prevent_close = true;
               } 
             }

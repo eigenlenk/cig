@@ -7,6 +7,7 @@
 #include "apps/welcome/welcome.h"
 #include "apps/games/wordwiz/wordwiz.h"
 #include "apps/accessories/calculator/calculator.h"
+#include "apps/accessories/clock/clock.h"
 #include "cigcorem.h"
 #include "cigext.h"
 #include <time.h>
@@ -421,12 +422,13 @@ setup_menus()
   menu_setup(&start_menus[START_PROGRAMS_ACCESSORIES], "Accessories", START_SUBMENU, NULL, 1, (menu_group[]) {
     {
       .items = {
-        .count = 4,
+        .count = 5,
         .list = {
           { .type = CHILD_MENU, .data = &start_menus[START_PROGRAMS_ACCESSORIES_GAMES], .icon = IMAGE_PROGRAM_FOLDER_16 },
           { .title = "Calculator", .icon = IMAGE_CALCULATOR_16, .data = calculator_app, .handler = &launch_menu_item_app },
           { .title = "Notepad", .icon = IMAGE_NOTEPAD_16 },
-          { .title = "Paint", .icon = IMAGE_PAINT_16 }
+          { .title = "Paint", .icon = IMAGE_PAINT_16 },
+          { .title = "Clock", .icon = IMAGE_CLOCK_16, .data = clock_app, .handler = &launch_menu_item_app }
         }
       }
     }

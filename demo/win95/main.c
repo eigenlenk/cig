@@ -1,4 +1,5 @@
 #include "raylib.h"
+#include "rlgl.h"
 #include "cig.h"
 #include "win95.h"
 #include "cigext.h"
@@ -136,6 +137,19 @@ static bool dithering_shader_enabled = false;
 static bool is_verbose = false;
 static RenderTexture2D render_texture;
 
+static struct {
+  RenderTexture2D *stack[8];
+  int depth;
+} rt_stack = { 0 };
+
+static struct {
+  struct {
+    RenderTexture2D *texture;
+    cig_v size;
+  } items[8];
+  int count;
+} rt_resize_queue = { 0 };
+
 /*  Core API */
 static void set_clip_rect(cig_buffer_ref, cig_r, bool);
 
@@ -162,6 +176,7 @@ static cig_v measure_image(cig_image_ref);
 static void draw_style(cig_style_ref, cig_r, cig_style_modifiers);
 static void draw_rectangle(cig_color_ref, cig_color_ref, cig_r, unsigned int);
 static void draw_line(cig_color_ref, cig_v, cig_v, float);
+static void draw_polygon(cig_v, cig_v*, size_t, cig_color_ref);
 
 #ifdef DEBUG
 static RenderTexture2D debug_texture;
@@ -184,8 +199,112 @@ void* get_style(style_id_t id) {
   return &panel_styles[id];
 }
 
-void enable_blue_selection_dithering(bool enabled) {
+void renderer_enable_blue_selection_dithering(bool enabled) {
   dithering_shader_enabled = enabled;
+}
+
+cig_buffer_ref
+framebuffer_create(int w, int h)
+{
+  RenderTexture2D *tex2d = malloc(sizeof(RenderTexture2D));
+  *tex2d = LoadRenderTexture(w, h);
+  SetTextureFilter(tex2d->texture, TEXTURE_FILTER_POINT);
+  return tex2d;
+}
+
+void
+framebuffer_free(cig_buffer_ref buffer)
+{
+  UnloadRenderTexture(*(RenderTexture2D *)buffer);
+  free(buffer);
+}
+
+bool
+framebuffer_resize_if_needed(cig_buffer_ref buffer, int w, int h)
+{
+  RenderTexture2D *tex = (RenderTexture2D *)buffer;
+  int step = 50; // make configurable?
+
+  int nw = ((w + step) / step) * step;
+  int nh = ((h + step) / step) * step;
+
+  if (nw > tex->texture.width || nh > tex->texture.height) {
+    /* Size up */
+    // printf("Resize UP from %d, %d to %d, %d (%d, %d)\n", tex->texture.width, tex->texture.height, nw, nh, w, h);
+    rt_resize_queue.items[rt_resize_queue.count].texture = tex;
+    rt_resize_queue.items[rt_resize_queue.count].size = cig_v_make(nw, nh);
+    rt_resize_queue.count ++;
+    return true;
+  } else if (nw < (int)tex->texture.width - step || nh < (int)tex->texture.height - step) {
+    /* Size down */
+    // printf("Resize DOWN from %d, %d to %d, %d (%d, %d)\n", tex->texture.width, tex->texture.height, nw, nh, w, h);
+    rt_resize_queue.items[rt_resize_queue.count].texture = tex;
+    rt_resize_queue.items[rt_resize_queue.count].size = cig_v_make(nw, nh);
+    rt_resize_queue.count ++;
+    return true;
+  }
+
+  return false;
+}
+
+void renderer_push_buffer(cig_buffer_ref buffer)
+{
+  RenderTexture2D *tex = (RenderTexture2D *)buffer;
+  rt_stack.stack[rt_stack.depth++] = tex;
+  BeginTextureMode(*tex);
+}
+
+void renderer_pop_buffer(cig_r rect)
+{
+  rt_stack.depth -= 1;
+
+  RenderTexture2D *src = rt_stack.stack[rt_stack.depth];
+
+  if (rt_stack.depth > 0) {
+    RenderTexture2D *dst = rt_stack.stack[rt_stack.depth-1];
+
+    BeginTextureMode(*dst);
+
+    DrawTexturePro(
+      src->texture,
+      (Rectangle) { 0, src->texture.height - rect.h, rect.w, -rect.h }, // (float)tex->texture.width, (float)-tex->texture.height },
+      (Rectangle) { rect.x, rect.y, rect.w, rect.h },
+      (Vector2) { 0, 0 },
+      0,
+      WHITE
+    );
+  } else {
+    EndTextureMode();
+
+    DrawTexturePro(
+      src->texture,
+      (Rectangle) { 0, 0, rect.w, -rect.h }, // (float)tex->texture.width, (float)-tex->texture.height },
+      (Rectangle) { rect.x, rect.y, GetScreenWidth(), GetScreenHeight() },
+      (Vector2) { 0, 0 },
+      0,
+      WHITE
+    );
+  }
+}
+
+void
+renderer_clear(void)
+{
+  ClearBackground((Color) { 0, 0, 0, 0 });
+}
+
+static void
+process_render_texture_resize_queue()
+{
+  int i;
+
+  for (i = 0; i < rt_resize_queue.count; ++i) {
+    UnloadRenderTexture(*rt_resize_queue.items[i].texture);
+    *rt_resize_queue.items[i].texture = LoadRenderTexture(rt_resize_queue.items[i].size.x, rt_resize_queue.items[i].size.y);
+    SetTextureFilter(rt_resize_queue.items[i].texture->texture, TEXTURE_FILTER_POINT);
+  }
+
+  rt_resize_queue.count = 0;
 }
 
 M_INLINED void load_texture(Texture2D *dst, const char *path)
@@ -362,6 +481,8 @@ main(int argc, const char *argv[])
   load_texture(&images[IMAGE_NOTEPAD_16], "res/images/notepad_16.png");
   load_texture(&images[IMAGE_PAINT_16], "res/images/paint_16.png");
   load_texture(&images[IMAGE_WORDWIZ_16], "res/images/wordwiz_16.png");
+  load_texture(&images[IMAGE_CLOCK_32], "res/images/clock_32.png");
+  load_texture(&images[IMAGE_CLOCK_16], "res/images/clock_16.png");
 
   blue_dither_shader = LoadShader(0, "res/shaders/blue_dither.fs");
 
@@ -395,10 +516,16 @@ main(int argc, const char *argv[])
   colors[COLOR_MAROON] = (Color) { 128, 0, 0, 255 };
   colors[COLOR_BLUE] = (Color) { 0, 0, 255, 255 };
   colors[COLOR_NAVY] = (Color) { 0, 0, 128, 255 };
+  colors[COLOR_LIGHT_CYAN] = (Color) { 0, 255, 255, 255 };
+  colors[COLOR_DARK_GRAY] = (Color) { 127, 127, 127, 255 };
+  colors[COLOR_LIGHT_GRAY] = (Color) { 192, 192, 192, 255 };
   colors[COLOR_DESKTOP_BG] = (Color) { 0, 127, 127, 255 };
-  colors[COLOR_DIALOG_BACKGROUND] = (Color) { 195, 195, 195, 255 };
+  colors[COLOR_DIALOG_BACKGROUND] = (Color) { 192, 192, 192, 255 };
   colors[COLOR_WINDOW_ACTIVE_TITLEBAR] = (Color) { 0, 0, 127, 255 };
   colors[COLOR_WINDOW_INACTIVE_TITLEBAR] = (Color) { 127, 127, 127, 255 };
+  colors[COLOR_CLOCK_HAND_SHADOW] = (Color) { 127, 127, 127, 255 };
+  colors[COLOR_CLOCK_HAND] = (Color) { 0, 127, 127, 255 };
+  colors[COLOR_CLOCK_SECONDS_HAND] = (Color) { 63, 63, 63, 255 };
   
   for (i = 0; i < __STYLE_COUNT; ++i) { panel_styles[i] = i; }
 
@@ -425,6 +552,7 @@ main(int argc, const char *argv[])
   cig_assign_draw_style(&draw_style);
   cig_assign_draw_rectangle(&draw_rectangle);
   cig_assign_draw_line(&draw_line);
+  cig_assign_draw_polygon(&draw_polygon);
 
 #ifdef DEBUG
   cig_set_layout_breakpoint_callback(&layout_breakpoint);
@@ -434,7 +562,7 @@ main(int argc, const char *argv[])
    * Calling begin layout here, so that when win95 instance starts,
    * it already has a size reference to center some welcome windows into.
    */
-  cig_begin_layout(&ctx, NULL, cig_r_make(0, 0, win95_w, win95_h), 0.f);
+  cig_begin_layout(&ctx, &render_texture, cig_r_make(0, 0, win95_w, win95_h), 0.f);
 
   win95_t win_instance = { 0 };
   win95_initialize(&win_instance);
@@ -460,13 +588,16 @@ main(int argc, const char *argv[])
     }
 #endif
 
-    BeginTextureMode(render_texture);
+    rt_stack.depth = 0;
+    rt_resize_queue.count = 0;
+
+    renderer_push_buffer(&render_texture);
 
 #ifdef DEBUG
     ClearBackground((Color){0});
 #endif
 
-    cig_begin_layout(&ctx, NULL, cig_r_make(0, 0, win95_w, win95_h), GetFrameTime());
+    cig_begin_layout(&ctx, &render_texture, cig_r_make(0, 0, win95_w, win95_h), GetFrameTime());
     
     /* Update [mouse] pointer position and button states */
     cig_set_pointer_position(cig_v_make(GetMouseX()*scale, GetMouseY()*scale));
@@ -484,18 +615,12 @@ main(int argc, const char *argv[])
     
     cig_end_layout();
 
-    EndTextureMode();
-
-    DrawTexturePro(
-      render_texture.texture,
-      (Rectangle) { 0, 0, (float)render_texture.texture.width, (float)-render_texture.texture.height },
-      (Rectangle) { 0, 0, GetScreenWidth(), GetScreenHeight() },
-      (Vector2) { 0, 0 },
-      0,
-      WHITE
-    );
+    renderer_pop_buffer(cig_r_make(0, 0, render_texture.texture.width, render_texture.texture.height));
 
     EndDrawing();
+
+    /* Process render texture resize queue */
+    process_render_texture_resize_queue();
   }
 
   UnloadRenderTexture(render_texture); 
@@ -651,7 +776,7 @@ M_INLINED void draw_style(cig_style_ref style_ref, cig_r rect, cig_style_modifie
   }
 }
 
-M_INLINED void draw_rectangle(
+void draw_rectangle(
   cig_color_ref fill_color,
   cig_color_ref border_color,
   cig_r rect,
@@ -665,13 +790,36 @@ M_INLINED void draw_rectangle(
   }
 }
 
-M_INLINED void draw_line(
+void draw_line(
   cig_color_ref color,
   cig_v p0,
   cig_v p1,
   float thickness
 ) {
-  DrawLineEx(RAYLIB_VEC2(p0), RAYLIB_VEC2(p1), thickness, *(Color*)color);
+  if (thickness <= 1.f) {
+    DrawLineV(RAYLIB_VEC2(p0), RAYLIB_VEC2(p1), *(Color*)color);
+  } else {
+    DrawLineEx(RAYLIB_VEC2(p0), RAYLIB_VEC2(p1), thickness, *(Color*)color);
+  }
+}
+
+void
+draw_polygon(cig_v origin, cig_v *points, size_t n, cig_color_ref color)
+{
+  int i;
+
+  Color *fc = (Color*)color;
+
+  rlBegin(RL_TRIANGLES);
+  rlColor4ub(fc->r, fc->g, fc->b, fc->a);
+  
+  for (i = 0; i < n - 1; ++i) {
+    rlVertex2f(origin.x, origin.y);
+    rlVertex2f(origin.x + points[i].x, origin.y + points[i].y);
+    rlVertex2f(origin.x + points[i+1].x, origin.y + points[i+1].y);
+  }
+
+  rlEnd();
 }
 
 M_INLINED cig_v measure_image(cig_image_ref image) {

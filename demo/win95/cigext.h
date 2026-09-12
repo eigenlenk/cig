@@ -27,6 +27,7 @@ typedef enum M_PACKED {
 typedef void (*cig_draw_style_callback)(cig_style_ref, cig_r, cig_style_modifiers);
 typedef void (*cig_draw_rectangle_callback)(cig_color_ref, cig_color_ref, cig_r, unsigned int);
 typedef void (*cig_draw_line_callback)(cig_color_ref, cig_v, cig_v, float);
+typedef void (*cig_draw_polygon_fn)(cig_v, cig_v*, size_t, cig_color_ref);
 
 /*  ┌───────────────────┐
     │ BACKEND CALLBACKS │
@@ -37,6 +38,8 @@ void cig_assign_draw_style(cig_draw_style_callback);
 void cig_assign_draw_rectangle(cig_draw_rectangle_callback);
 
 void cig_assign_draw_line(cig_draw_line_callback);
+
+void cig_assign_draw_polygon(cig_draw_polygon_fn);
 
 /*  ┌───────────────────┐
     │ 2D DRAW FUNCTIONS │
@@ -51,6 +54,8 @@ void cig_fill_color(cig_color_ref);
 void cig_draw_line(cig_v, cig_v, cig_color_ref, float);
 
 void cig_draw_rect(cig_r, cig_color_ref, cig_color_ref, float);
+
+void cig_draw_polygon(cig_v, cig_v*, size_t, cig_color_ref);
 
 
 /**

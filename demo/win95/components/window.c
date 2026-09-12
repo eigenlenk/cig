@@ -24,6 +24,10 @@ window_begin(window_t *wnd)
     cig_r original_rect;
   } window_drag = { 0 };
 
+  if (wnd->flags & IS_MINIMIZED) {
+    return false;
+  }
+
   cig_set_next_id(wnd->id);
   
   const cig_i wnd_insets = (wnd->flags & IS_MAXIMIZED)
@@ -217,27 +221,28 @@ handle_window_resize(window_t *wnd, window_resize_edge_t edge)
 
   case CIG_DRAG_STATE_MOVED:
   {
-      const cig_r rect_before = wnd->rect;
       const int dx = cig_input_state()->pointer.drag.change_total.x,
                 dy = cig_input_state()->pointer.drag.change_total.y;
 
+      wnd->rect_resized = wnd->rect;
+
       if (edge_adjustments[edge].x) {
-        wnd->rect.w = M_MAX(wnd->min_size.x, window_resize.original_rect.w - dx);
-        wnd->rect.x = window_resize.original_rect.x + (window_resize.original_rect.w - wnd->rect.w);
+        wnd->rect_resized.w = M_MAX(wnd->min_size.x, window_resize.original_rect.w - dx);
+        wnd->rect_resized.x = window_resize.original_rect.x + (window_resize.original_rect.w - wnd->rect_resized.w);
       }
       if (edge_adjustments[edge].y) {
-        wnd->rect.h = M_MAX(wnd->min_size.y, window_resize.original_rect.h - dy);
-        wnd->rect.y = window_resize.original_rect.y + (window_resize.original_rect.h - wnd->rect.h);
+        wnd->rect_resized.h = M_MAX(wnd->min_size.y, window_resize.original_rect.h - dy);
+        wnd->rect_resized.y = window_resize.original_rect.y + (window_resize.original_rect.h - wnd->rect_resized.h);
       }
       if (edge_adjustments[edge].w) {
-        wnd->rect.w = M_MAX(wnd->min_size.x, window_resize.original_rect.w + dx);
+        wnd->rect_resized.w = M_MAX(wnd->min_size.x, window_resize.original_rect.w + dx);
       }
       if (edge_adjustments[edge].h) {
-        wnd->rect.h = M_MAX(wnd->min_size.y, window_resize.original_rect.h + dy);
+        wnd->rect_resized.h = M_MAX(wnd->min_size.y, window_resize.original_rect.h + dy);
       }
 
-      if (!cig_r_equals(wnd->rect, rect_before)) {
-        wnd->updates |= WINDOW_DID_RESIZE;
+      if (!cig_r_equals(wnd->rect, wnd->rect_resized)) {
+        wnd->updates_deferred |= WINDOW_DID_RESIZE;
       }
     break;
   }

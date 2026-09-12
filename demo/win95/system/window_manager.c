@@ -74,10 +74,7 @@ window_manager_process(window_manager_t *this)
   for (i = 0; i < this->count; ++i) {
     window_t *wnd = this->order[i];
 
-    if (wnd->flags & IS_MINIMIZED) {
-      wnd->updates = 0;
-      continue;
-    }
+    wnd->updates_deferred = 0;
 
     if (!window_begin(wnd)) {
       wnd->updates = 0;
@@ -90,6 +87,11 @@ window_manager_process(window_manager_t *this)
     }
 
     wnd->updates = 0;
+
+    if (wnd->updates_deferred & WINDOW_DID_RESIZE) {
+      wnd->rect = wnd->rect_resized;
+      wnd->updates |= WINDOW_DID_RESIZE;
+    }
 
     if (wnd->last_message) {
       switch (wnd->last_message) {

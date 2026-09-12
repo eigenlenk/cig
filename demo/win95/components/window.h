@@ -28,11 +28,13 @@ typedef struct window_t {
   cig_id id;
   win_proc_t proc;
   window_message_t last_message;
-  window_update updates;
+  window_update updates,
+                updates_deferred;
   void *data;
   void (*on_close)(struct window_t *);
-  cig_r rect;
-  cig_r rect_before_maximized;
+  cig_r rect,
+        rect_before_maximized,
+        rect_resized;
   cig_v min_size;
   char *title;
   int icon;
